@@ -1,0 +1,137 @@
+import random
+
+def aco_knapsack(weights, values, W, n_ants, n_iter):
+    n = len(weights)
+    # Феромоны: матрица n×n, начальное значение 1.0
+    pheromone = [[1.0 for _ in range(n)] for _ in range(n)]
+    best_value = 0
+    best_items = []
+    
+    # Параметры алгоритма
+    alpha = 1.0  # вес феромона
+    beta = 2.0   # вес эвристики
+    rho = 0.5    # коэффициент испарения
+    
+    for iter in range(n_iter):
+        all_solutions = []
+        
+        for ant in range(n_ants):
+            solution = []
+            total_weight = 0
+            available = list(range(n))
+            
+            # Строим решение муравья: выбираем предметы по правилу ACO
+            while True:
+                # Собираем список допустимых предметов (weight + total_weight ≤ W)
+                feasible = [i for i in available if weights[i] + total_weight <= W]
+                
+                if not feasible:
+                    break
+                
+                # Вычисляем вероятности выбора по феромону и удельной ценности
+                probabilities = []
+                total = 0.0
+                
+                for i in feasible:
+                    # Эвристика: удельная ценность (value/weight)
+                    heuristic = values[i] / weights[i] if weights[i] > 0 else values[i]
+                    
+                    # Текущий феромон (берем среднее по всем связям с уже выбранными предметами)
+                    if solution:
+                        pheromone_sum = sum(pheromone[last_item][i] for last_item in solution)
+                        current_pheromone = pheromone_sum / len(solution)
+                    else:
+                        current_pheromone = 1.0
+                    
+                    # Вероятность выбора
+                    prob = (current_pheromone ** alpha) * (heuristic ** beta)
+                    probabilities.append(prob)
+                    total += prob
+                
+                # Нормализуем вероятности
+                if total > 0:
+                    probabilities = [p / total for p in probabilities]
+                else:
+                    # Если все вероятности нулевые, используем равномерное распределение
+                    probabilities = [1.0 / len(feasible)] * len(feasible)
+                
+                # Выбираем предмет стохастически (метод рулетки)
+                rand_val = random.random()
+                cumulative_prob = 0.0
+                selected_index = -1
+                
+                for i, prob in enumerate(probabilities):
+                    cumulative_prob += prob
+                    if rand_val <= cumulative_prob:
+                        selected_index = i
+                        break
+                
+                if selected_index == -1:
+                    selected_index = len(feasible) - 1
+                
+                selected_item = feasible[selected_index]
+                solution.append(selected_item)
+                total_weight += weights[selected_item]
+                available.remove(selected_item)
+            
+            # Вычисляем ценность решения
+            solution_value = sum(values[i] for i in solution)
+            all_solutions.append((solution, solution_value, total_weight))
+            
+            # Обновляем лучший результат
+            if solution_value > best_value:
+                best_value = solution_value
+                best_items = solution.copy()
+        
+        # Испаряем феромоны (умножаем на коэффициент)
+        for i in range(n):
+            for j in range(n):
+                pheromone[i][j] *= (1.0 - rho)
+        
+        # Усиливаем феромоны на рёбрах лучших решений
+        for solution, solution_value, total_weight in all_solutions:
+            if solution_value > 0:
+                # Количество феромона для добавления пропорционально ценности решения
+                delta_pheromone = solution_value / best_value if best_value > 0 else 0.1
+                
+                # Обновляем феромоны на всех парах предметов в решении
+                for i in range(len(solution)):
+                    for j in range(i + 1, len(solution)):
+                        item1, item2 = solution[i], solution[j]
+                        pheromone[item1][item2] += delta_pheromone
+                        pheromone[item2][item1] += delta_pheromone
+        
+        # Выводим информацию о текущей итерации
+        if (iter + 1) % 10 == 0:
+            print(f"Итерация {iter + 1}: лучшая ценность = {best_value}")
+    
+    return best_items, best_value
+
+# Пример использования
+if __name__ == "__main__":
+    # Пример задачи о рюкзаке
+    weights = [2, 3, 4, 5, 9]  # веса предметов
+    values = [3, 4, 8, 8, 10]  # ценности предметов
+    capacity = 20               # вместимость рюкзака
+    n_ants = 10                 # количество муравьев
+    n_iterations = 50           # количество итераций
+    
+    print("Задача о рюкзаке с использованием алгоритма муравьиной колонии")
+    print(f"Веса: {weights}")
+    print(f"Ценности: {values}")
+    print(f"Вместимость рюкзака: {capacity}")
+    print(f"Количество муравьев: {n_ants}")
+    print(f"Количество итераций: {n_iterations}")
+    print("\nЗапуск алгоритма...")
+    
+    best_solution, best_val = aco_knapsack(weights, values, capacity, n_ants, n_iterations)
+    
+    print("\nРезультат:")
+    print(f"Лучшее решение: предметы {best_solution}")
+    print(f"Общая ценность: {best_val}")
+    print(f"Общий вес: {sum(weights[i] for i in best_solution)}")
+    
+    # Детали решения
+    print("\nДетали выбранных предметов:")
+    for i in best_solution:
+        print(f"Предмет {i}: вес={weights[i]}, ценность={values[i]}")
